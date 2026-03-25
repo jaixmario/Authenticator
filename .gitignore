@@ -1,5 +1,5 @@
 /ok.exe
 /okk.exe
 /auth.exe
-/staic
-/.authkey
+*exe
+.authkey
