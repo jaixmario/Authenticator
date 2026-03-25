@@ -1,19 +1,11 @@
-#include <stdio.h>
-#include <stdint.h>
+#include "totp.h"
 #include <string.h>
-#include <time.h>
 #include <stdlib.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#define sleep(x) Sleep(1000 * (x))
-#else
-#include <unistd.h>
-#endif
+#include <time.h>
 
 #define ROL(x,n) ((x << n) | (x >> (32 - n)))
 
-void sha1(const uint8_t *msg, size_t len, uint8_t *out) {
+void sha1(const uint8_t *msg,size_t len,uint8_t *out){
     uint32_t h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE;
     uint32_t h3=0x10325476,h4=0xC3D2E1F0;
 
@@ -64,10 +56,7 @@ void sha1(const uint8_t *msg, size_t len, uint8_t *out) {
     out[16]=h4>>24; out[17]=h4>>16; out[18]=h4>>8; out[19]=h4;
 }
 
-void hmac_sha1(const uint8_t *key,int klen,
-               const uint8_t *data,int dlen,
-               uint8_t *out){
-
+void hmac_sha1(const uint8_t *key,int klen,const uint8_t *data,int dlen,uint8_t *out){
     uint8_t ipad[64]={0},opad[64]={0},tmp[20];
 
     memcpy(ipad,key,klen);
@@ -106,23 +95,4 @@ int totp(uint8_t *key,int len){
             ((h[o+2]&0xFF)<<8)|(h[o+3]&0xFF);
 
     return bin%1000000;
-}
-
-int main(){
-    char input[128];
-
-    printf("Enter secret key: ");
-    fgets(input,sizeof(input),stdin);
-
-    input[strcspn(input,"\n")] = 0;
-
-    uint8_t *key = (uint8_t*)input;
-
-    while(1){
-        int code = totp(key,strlen((char*)key));
-        printf("%06d  (%ld sec)\n",code,30-(time(NULL)%30));
-        sleep(1);
-    }
-
-    return 0;
 }
