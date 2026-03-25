@@ -1,22 +1,111 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define FILE_NAME ".authkey"
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
-void save_key(char *key){
-    FILE *f=fopen(FILE_NAME,"w");
-    if(f){
-        fprintf(f,"%s",key);
-        fclose(f);
+#include "storage.h"
+
+void get_db_path(char *buffer, size_t size) {
+    const char *home = getenv("USERPROFILE");
+    if (!home) home = getenv("HOME");
+    if (!home) home = ".";
+
+    snprintf(buffer, size, "%s/.authenticator", home);
+    
+#ifdef _WIN32
+    CreateDirectory(buffer, NULL);
+#else
+    struct stat st = {0};
+    if (stat(buffer, &st) == -1) {
+        mkdir(buffer, 0700);
     }
+#endif
+
+    snprintf(buffer, size, "%s/.authenticator/db.json", home);
 }
 
-int load_key(char *key){
-    FILE *f=fopen(FILE_NAME,"r");
-    if(!f) return 0;
+int load_entries(AuthEntry *entries, int max_entries) {
+    char path[512];
+    get_db_path(path, sizeof(path));
 
-    fgets(key,128,f);
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+
+    int count = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), f) && count < max_entries) {
+        char *quote1 = strchr(line, '"');
+        if (!quote1) continue;
+        char *quote2 = strchr(quote1 + 1, '"');
+        if (!quote2) continue;
+        
+        char *colon = strchr(quote2 + 1, ':');
+        if (!colon) continue;
+
+        char *quote3 = strchr(colon + 1, '"');
+        if (!quote3) continue;
+        char *quote4 = strchr(quote3 + 1, '"');
+        if (!quote4) continue;
+
+        int nick_len = quote2 - quote1 - 1;
+        int key_len = quote4 - quote3 - 1;
+
+        if (nick_len >= 64) nick_len = 63;
+        if (key_len >= 128) key_len = 127;
+
+        strncpy(entries[count].nickname, quote1 + 1, nick_len);
+        entries[count].nickname[nick_len] = '\0';
+
+        strncpy(entries[count].key, quote3 + 1, key_len);
+        entries[count].key[key_len] = '\0';
+
+        count++;
+    }
+
     fclose(f);
-    key[strcspn(key,"\n")] = 0;
+    return count;
+}
+
+int save_entry(const char *nickname, const char *key) {
+    char path[512];
+    get_db_path(path, sizeof(path));
+
+    AuthEntry entries[100];
+    int count = load_entries(entries, 100);
+
+    int updated = 0;
+    for (int i=0; i<count; i++) {
+        if (strcmp(entries[i].nickname, nickname) == 0) {
+            strncpy(entries[i].key, key, 127);
+            entries[i].key[127] = '\0';
+            updated = 1;
+            break;
+        }
+    }
+
+    if (!updated && count < 100) {
+        strncpy(entries[count].nickname, nickname, 63);
+        entries[count].nickname[63] = '\0';
+        strncpy(entries[count].key, key, 127);
+        entries[count].key[127] = '\0';
+        count++;
+    }
+
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+
+    fprintf(f, "{\n");
+    for (int i=0; i<count; i++) {
+        fprintf(f, "  \"%s\": \"%s\"%s\n", entries[i].nickname, entries[i].key, i == count - 1 ? "" : ",");
+    }
+    fprintf(f, "}\n");
+
+    fclose(f);
     return 1;
 }

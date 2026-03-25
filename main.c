@@ -14,28 +14,39 @@
 #include <unistd.h>
 #endif
 
-int main(){
-    char key[128];
-    unsigned char decoded[64];
-
-    if(!load_key(key)){
-        printf("Enter Base32 key: ");
-        fgets(key,sizeof(key),stdin);
-        key[strcspn(key,"\n")] = 0;
-        save_key(key);
-    } else {
-        printf("Key loaded\n");
+int main(int argc, char *argv[]) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc >= 3) {
+        save_entry(argv[1], argv[2]);
+        printf("Saved key '%s' under nickname '%s'\n", argv[2], argv[1]);
+        return 0;
     }
 
-    int key_len = base32_decode(key, decoded);
-    if(key_len <= 0){
-        printf("Invalid key\n");
+    AuthEntry entries[100];
+    int count = load_entries(entries, 100);
+
+    if (count == 0) {
+        printf("No keys found. Add one with: auth.exe <nickname> <key>\n");
         return 1;
     }
 
-    while(1){
-        int code = totp(decoded,key_len);
-        printf("%06d (%ld sec)\n",code,30-(time(NULL)%30));
+    printf("Loaded %d keys.\n\n", count);
+
+    while (1) {
+        long remaining = 30 - (time(NULL) % 30);
+        printf("--- %ld sec ---\n", remaining);
+        
+        for (int i=0; i<count; i++) {
+            unsigned char decoded[64];
+            int key_len = base32_decode(entries[i].key, decoded);
+            if (key_len <= 0) {
+                printf("%-15s: Invalid Key\n", entries[i].nickname);
+            } else {
+                int code = totp(decoded, key_len);
+                printf("%-15s: %06d\n", entries[i].nickname, code);
+            }
+        }
+        printf("\n");
         sleep(1);
     }
 
