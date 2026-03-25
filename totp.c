@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define ROL(x,n) ((x << n) | (x >> (32 - n)))
+#define ROL(x,n) (((x) << (n)) | ((x) >> (32 - (n))))
 
 void sha1(const uint8_t *msg,size_t len,uint8_t *out){
     uint32_t h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE;
