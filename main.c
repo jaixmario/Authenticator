@@ -9,8 +9,39 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <wininet.h>
 #include <stdlib.h>
+#pragma comment(lib, "wininet.lib")
+
 #define sleep(x) Sleep(1000 * (x))
+
+int download_key(const char* url, char* key_out, size_t max_len) {
+    HINTERNET hInternet = InternetOpenA("Authenticator/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInternet) return 0;
+    
+    HINTERNET hConnect = InternetOpenUrlA(hInternet, url, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
+    if (!hConnect) {
+        InternetCloseHandle(hInternet);
+        return 0;
+    }
+    
+    DWORD bytesRead;
+    size_t totalRead = 0;
+    while (InternetReadFile(hConnect, key_out + totalRead, (DWORD)(max_len - totalRead - 1), &bytesRead) && bytesRead > 0) {
+        totalRead += bytesRead;
+        if (totalRead >= max_len - 1) break;
+    }
+    key_out[totalRead] = '\0';
+    
+    while(totalRead > 0 && (key_out[totalRead-1] == '\n' || key_out[totalRead-1] == '\r' || key_out[totalRead-1] == ' ')) {
+        key_out[--totalRead] = '\0';
+    }
+    
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+    return totalRead > 0;
+}
+
 void move_up(int lines) {
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -27,6 +58,12 @@ void clear_screen() {
 #else
 #include <unistd.h>
 #include <stdlib.h>
+
+int download_key(const char* url, char* key_out, size_t max_len) {
+    printf("Downloading from URL is only supported on Windows.\n");
+    return 0;
+}
+
 void move_up(int lines) {
     printf("\033[%dA\r", lines);
 }
@@ -35,11 +72,69 @@ void clear_screen() {
 }
 #endif
 
+void parse_and_save_json_keys(const char* json_str) {
+    const char *ptr = json_str;
+    int count = 0;
+    while (*ptr) {
+        const char *quote1 = strchr(ptr, '"');
+        if (!quote1) break;
+        const char *quote2 = strchr(quote1 + 1, '"');
+        if (!quote2) break;
+        const char *colon = strchr(quote2 + 1, ':');
+        if (!colon) { ptr = quote2 + 1; continue; }
+        
+        const char *qcheck = strchr(quote2 + 1, '"');
+        if (qcheck && qcheck < colon) { ptr = quote2 + 1; continue; }
+
+        const char *quote3 = strchr(colon + 1, '"');
+        if (!quote3) break;
+        const char *quote4 = strchr(quote3 + 1, '"');
+        if (!quote4) break;
+        
+        int nick_len = (int)(quote2 - quote1 - 1);
+        int key_len = (int)(quote4 - quote3 - 1);
+        
+        char nickname[64];
+        char key[128];
+        
+        if (nick_len >= 64) nick_len = 63;
+        if (key_len >= 128) key_len = 127;
+        
+        strncpy(nickname, quote1 + 1, nick_len);
+        nickname[nick_len] = '\0';
+        
+        strncpy(key, quote3 + 1, key_len);
+        key[key_len] = '\0';
+        
+        save_entry(nickname, key);
+        printf("Merged key for '%s'\n", nickname);
+        count++;
+        
+        ptr = quote4 + 1;
+    }
+    if (count == 0) {
+        printf("No keys found in the downloaded JSON.\n");
+    } else {
+        printf("Successfully merged %d key(s).\n", count);
+    }
+}
+
 int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
-    if (argc >= 3) {
-        save_entry(argv[1], argv[2]);
-        printf("Saved key '%s' under nickname '%s'\n", argv[2], argv[1]);
+
+    if (argc == 2 && (strncmp(argv[1], "http://", 7) == 0 || strncmp(argv[1], "https://", 8) == 0)) {
+        char *downloaded_json = (char*)malloc(8192);
+        if (!downloaded_json) {
+            printf("Memory allocation failed.\n");
+            return 1;
+        }
+        printf("Downloading JSON from %s...\n", argv[1]);
+        if (download_key(argv[1], downloaded_json, 8192)) {
+            parse_and_save_json_keys(downloaded_json);
+        } else {
+            printf("Failed to download from URL.\n");
+        }
+        free(downloaded_json);
         return 0;
     }
 
@@ -47,7 +142,7 @@ int main(int argc, char *argv[]) {
     int count = load_entries(entries, 100);
 
     if (count == 0) {
-        printf("No keys found. Add one with: auth.exe <nickname> <key>\n");
+        printf("No keys found. Add keys from a URL with: auth.exe <url>\n");
         return 1;
     }
 
