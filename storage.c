@@ -109,3 +109,63 @@ int save_entry(const char *nickname, const char *key) {
     fclose(f);
     return 1;
 }
+
+void get_urls_path(char *buffer, size_t size) {
+    const char *home = getenv("USERPROFILE");
+    if (!home) home = getenv("HOME");
+    if (!home) home = ".";
+    snprintf(buffer, size, "%s/.authenticator/urls.json", home);
+}
+
+int load_urls(char urls[][512], int max_urls) {
+    char path[512];
+    get_urls_path(path, sizeof(path));
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+
+    int count = 0;
+    char line[1024];
+    while (fgets(line, sizeof(line), f) && count < max_urls) {
+        char *quote1 = strchr(line, '"');
+        if (!quote1) continue;
+        char *quote2 = strchr(quote1 + 1, '"');
+        if (!quote2) continue;
+        
+        int len = quote2 - quote1 - 1;
+        if (len >= 512) len = 511;
+        
+        strncpy(urls[count], quote1 + 1, len);
+        urls[count][len] = '\0';
+        count++;
+    }
+    fclose(f);
+    return count;
+}
+
+int save_url(const char *url) {
+    char urls[20][512];
+    int count = load_urls(urls, 20);
+    
+    for (int i=0; i<count; i++) {
+        if (strcmp(urls[i], url) == 0) return 1;
+    }
+    
+    if (count < 20) {
+        strncpy(urls[count], url, 511);
+        urls[count][511] = '\0';
+        count++;
+    }
+    
+    char path[512];
+    get_urls_path(path, sizeof(path));
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+    
+    fprintf(f, "[\n");
+    for (int i=0; i<count; i++) {
+        fprintf(f, "  \"%s\"%s\n", urls[i], i == count - 1 ? "" : ",");
+    }
+    fprintf(f, "]\n");
+    fclose(f);
+    return 1;
+}
