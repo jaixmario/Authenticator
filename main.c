@@ -122,49 +122,60 @@ void parse_and_save_json_keys(const char* json_str) {
 int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    if (argc == 2 && (strncmp(argv[1], "http://", 7) == 0 || strncmp(argv[1], "https://", 8) == 0)) {
-        char *downloaded_json = (char*)malloc(8192);
-        if (!downloaded_json) {
-            printf("Memory allocation failed.\n");
-            return 1;
-        }
-        printf("Downloading JSON from %s...\n", argv[1]);
-        if (download_key(argv[1], downloaded_json, 8192)) {
-            parse_and_save_json_keys(downloaded_json);
-            save_url(argv[1]);
-        } else {
-            printf("Failed to download from URL.\n");
-        }
-        free(downloaded_json);
-        return 0;
-    }
-
-    if (argc == 2 && strcmp(argv[1], "refresh") == 0) {
-        char urls[20][512];
-        int url_count = load_urls(urls, 20);
-        if (url_count == 0) {
-            printf("No URLs saved. Fetch a key first using: auth.exe <url>\n");
-            return 1;
-        }
-        printf("Refreshing keys from %d saved URLs...\n", url_count);
-        for (int i=0; i<url_count; i++) {
+    if (argc > 1) {
+        if (argc == 3 && strcmp(argv[1], "--url") == 0 && (strncmp(argv[2], "http://", 7) == 0 || strncmp(argv[2], "https://", 8) == 0)) {
             char *downloaded_json = (char*)malloc(8192);
-            if (downloaded_json && download_key(urls[i], downloaded_json, 8192)) {
-                printf("--- Refreshed from %s ---\n", urls[i]);
-                parse_and_save_json_keys(downloaded_json);
-            } else {
-                printf("Failed to fetch from %s\n", urls[i]);
+            if (!downloaded_json) {
+                printf("Memory allocation failed.\n");
+                return 1;
             }
-            if (downloaded_json) free(downloaded_json);
+            printf("Downloading JSON from %s...\n", argv[2]);
+            if (download_key(argv[2], downloaded_json, 8192)) {
+                parse_and_save_json_keys(downloaded_json);
+                save_url(argv[2]);
+            } else {
+                printf("Failed to download from URL.\n");
+            }
+            free(downloaded_json);
+            return 0;
+        } else if (argc == 2 && strcmp(argv[1], "--refresh") == 0) {
+            char urls[20][512];
+            int url_count = load_urls(urls, 20);
+            if (url_count == 0) {
+                printf("No URLs saved. Fetch a key first using: auth.exe --url <link>\n");
+                return 1;
+            }
+            printf("Refreshing keys from %d saved URLs...\n", url_count);
+            for (int i=0; i<url_count; i++) {
+                char *downloaded_json = (char*)malloc(8192);
+                if (downloaded_json && download_key(urls[i], downloaded_json, 8192)) {
+                    printf("--- Refreshed from %s ---\n", urls[i]);
+                    parse_and_save_json_keys(downloaded_json);
+                } else {
+                    printf("Failed to fetch from %s\n", urls[i]);
+                }
+                if (downloaded_json) free(downloaded_json);
+            }
+            return 0;
+        } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+            // help printed below
+        } else {
+            printf("Invalid parameter passed.\n\n");
         }
-        return 0;
+
+        printf("Usage:\n");
+        printf("  auth.exe --url <link>   : Download keys natively from <link> and save URL.\n");
+        printf("  auth.exe --refresh      : Refresh and download keys from all saved URLs.\n");
+        printf("  auth.exe --help         : Show this help message.\n");
+        printf("  auth.exe                : Launch the TOTP authenticator.\n");
+        return 1;
     }
 
     AuthEntry entries[100];
     int count = load_entries(entries, 100);
 
     if (count == 0) {
-        printf("No keys found. Add keys from a URL with: auth.exe <url>\n");
+        printf("No keys found. Add keys from a URL with: auth.exe --url <link>\n");
         return 1;
     }
 
