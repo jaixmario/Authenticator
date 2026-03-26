@@ -79,22 +79,55 @@ int save_entry(const char *nickname, const char *key) {
     AuthEntry entries[100];
     int count = load_entries(entries, 100);
 
-    int updated = 0;
+    int found_index = -1;
     for (int i=0; i<count; i++) {
         if (strcmp(entries[i].nickname, nickname) == 0) {
-            strncpy(entries[i].key, key, 127);
-            entries[i].key[127] = '\0';
-            updated = 1;
+            found_index = i;
             break;
         }
     }
 
-    if (!updated && count < 100) {
-        strncpy(entries[count].nickname, nickname, 63);
-        entries[count].nickname[63] = '\0';
-        strncpy(entries[count].key, key, 127);
-        entries[count].key[127] = '\0';
-        count++;
+    if (found_index >= 0) {
+        if (strcmp(entries[found_index].key, key) == 0) {
+            printf("  -> Key for '%s' matches exactly. Skipping.\n", nickname);
+            return 1;
+        } else {
+            printf("  -> Conflict! '%s' has a different key.\n", nickname);
+            printf("     (r)eplace existing or (k)eep both as '%s 2'? [r/k]: ", nickname);
+            char choice[16];
+            if (fgets(choice, sizeof(choice), stdin)) {
+                if (choice[0] == 'r' || choice[0] == 'R') {
+                    strncpy(entries[found_index].key, key, 127);
+                    entries[found_index].key[127] = '\0';
+                } else if (choice[0] == 'k' || choice[0] == 'K') {
+                    if (count < 100) {
+                        snprintf(entries[count].nickname, 64, "%s 2", nickname);
+                        strncpy(entries[count].key, key, 127);
+                        entries[count].key[127] = '\0';
+                        count++;
+                    } else {
+                        printf("  -> Database is full!\n");
+                        return 0;
+                    }
+                } else {
+                    printf("  -> Aborted.\n");
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        }
+    } else {
+        if (count < 100) {
+            strncpy(entries[count].nickname, nickname, 63);
+            entries[count].nickname[63] = '\0';
+            strncpy(entries[count].key, key, 127);
+            entries[count].key[127] = '\0';
+            count++;
+        } else {
+            printf("  -> Database is full!\n");
+            return 0;
+        }
     }
 
     FILE *f = fopen(path, "w");

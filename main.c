@@ -160,9 +160,10 @@ void parse_and_save_json_keys(const char* json_str) {
         strncpy(key, quote3 + 1, key_len);
         key[key_len] = '\0';
         
-        save_entry(nickname, key);
-        printf("Merged key for '%s'\n", nickname);
-        count++;
+        if (save_entry(nickname, key)) {
+            printf("Merged key for '%s'\n", nickname);
+            count++;
+        }
         
         ptr = quote4 + 1;
     }
@@ -212,8 +213,9 @@ int main(int argc, char *argv[]) {
             }
             return 0;
         } else if (argc == 4 && strcmp(argv[1], "--add") == 0) {
-            save_entry(argv[2], argv[3]);
-            printf("Saved key for '%s'\n", argv[2]);
+            if (save_entry(argv[2], argv[3])) {
+                printf("Saved target key!\n");
+            }
             return 0;
         } else if (argc == 3 && strcmp(argv[1], "--delete") == 0) {
             if (delete_entry(argv[2])) {
