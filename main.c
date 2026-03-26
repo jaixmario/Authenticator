@@ -157,6 +157,10 @@ int main(int argc, char *argv[]) {
                 if (downloaded_json) free(downloaded_json);
             }
             return 0;
+        } else if (argc == 4 && strcmp(argv[1], "--add") == 0) {
+            save_entry(argv[2], argv[3]);
+            printf("Saved key for '%s'\n", argv[2]);
+            return 0;
         } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
             // help printed below
         } else {
@@ -164,10 +168,11 @@ int main(int argc, char *argv[]) {
         }
 
         printf("Usage:\n");
-        printf("  auth.exe --url <link>   : Download keys natively from <link> and save URL.\n");
-        printf("  auth.exe --refresh      : Refresh and download keys from all saved URLs.\n");
-        printf("  auth.exe --help         : Show this help message.\n");
-        printf("  auth.exe                : Launch the TOTP authenticator.\n");
+        printf("  auth.exe --url <link>       : Download keys natively from <link> and save URL.\n");
+        printf("  auth.exe --refresh          : Refresh and download keys from all saved URLs.\n");
+        printf("  auth.exe --add <nick> <key> : Add a specific TOTP key manually.\n");
+        printf("  auth.exe --help             : Show this help message.\n");
+        printf("  auth.exe                    : Launch the TOTP authenticator.\n");
         return 1;
     }
 
@@ -176,6 +181,7 @@ int main(int argc, char *argv[]) {
 
     if (count == 0) {
         printf("No keys found. Add keys from a URL with: auth.exe --url <link>\n");
+        printf("Or add manually: auth.exe --add <nickname> <key>\n");
         return 1;
     }
 
