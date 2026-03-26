@@ -110,6 +110,40 @@ int save_entry(const char *nickname, const char *key) {
     return 1;
 }
 
+int delete_entry(const char *nickname) {
+    char path[512];
+    get_db_path(path, sizeof(path));
+
+    AuthEntry entries[100];
+    int count = load_entries(entries, 100);
+
+    int updated = 0;
+    for (int i=0; i<count; i++) {
+        if (strcmp(entries[i].nickname, nickname) == 0) {
+            for (int j=i; j<count - 1; j++) {
+                entries[j] = entries[j+1];
+            }
+            count--;
+            updated = 1;
+            break;
+        }
+    }
+
+    if (!updated) return 0; // Not found
+
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+
+    fprintf(f, "{\n");
+    for (int i=0; i<count; i++) {
+        fprintf(f, "  \"%s\": \"%s\"%s\n", entries[i].nickname, entries[i].key, i == count - 1 ? "" : ",");
+    }
+    fprintf(f, "}\n");
+
+    fclose(f);
+    return 1;
+}
+
 void get_urls_path(char *buffer, size_t size) {
     const char *home = getenv("USERPROFILE");
     if (!home) home = getenv("HOME");

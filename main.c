@@ -215,6 +215,13 @@ int main(int argc, char *argv[]) {
             save_entry(argv[2], argv[3]);
             printf("Saved key for '%s'\n", argv[2]);
             return 0;
+        } else if (argc == 3 && strcmp(argv[1], "--delete") == 0) {
+            if (delete_entry(argv[2])) {
+                printf("Successfully deleted key for '%s'\n", argv[2]);
+            } else {
+                printf("Key for '%s' not found.\n", argv[2]);
+            }
+            return 0;
         } else if (argc >= 2 && strcmp(argv[1], "--upload") == 0) {
             char api_url[512];
             if (argc == 3) {
@@ -259,6 +266,7 @@ int main(int argc, char *argv[]) {
         printf("  auth.exe --refresh          : Refresh and download keys from all saved URLs.\n");
         printf("  auth.exe --upload [url]     : Upload all local keys to your cloud API.\n");
         printf("  auth.exe --add <nick> <key> : Add a specific TOTP key manually.\n");
+        printf("  auth.exe --delete <nick>    : Delete a TOTP key by its nickname.\n");
         printf("  auth.exe --help             : Show this help message.\n");
         printf("  auth.exe                    : Launch the TOTP authenticator.\n");
         return 1;
