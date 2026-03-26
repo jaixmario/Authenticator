@@ -169,3 +169,72 @@ int save_url(const char *url) {
     fclose(f);
     return 1;
 }
+
+void get_cloud_path(char *buffer, size_t size) {
+    const char *home = getenv("USERPROFILE");
+    if (!home) home = getenv("HOME");
+    if (!home) home = ".";
+    snprintf(buffer, size, "%s/.authenticator/cloud.json", home);
+}
+
+int load_cloud_api(char *url_out, size_t max_out) {
+    char path[512];
+    get_cloud_path(path, sizeof(path));
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    
+    char line[1024];
+    int loaded = 0;
+    while (fgets(line, sizeof(line), f)) {
+        char *quote1 = strchr(line, '"');
+        if (!quote1) continue;
+        char *quote2 = strchr(quote1 + 1, '"');
+        if (!quote2) continue;
+        char *colon = strchr(quote2 + 1, ':');
+        if (!colon) continue;
+        char *quote3 = strchr(colon + 1, '"');
+        if (!quote3) continue;
+        char *quote4 = strchr(quote3 + 1, '"');
+        if (!quote4) continue;
+        
+        int len = (int)(quote4 - quote3 - 1);
+        if (len >= max_out) len = (int)(max_out - 1);
+        
+        strncpy(url_out, quote3 + 1, len);
+        url_out[len] = '\0';
+        loaded = 1;
+        break;
+    }
+    fclose(f);
+    return loaded;
+}
+
+int save_cloud_api(const char *url) {
+    char path[512];
+    get_cloud_path(path, sizeof(path));
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+    fprintf(f, "{\n  \"api\": \"%s\"\n}\n", url);
+    fclose(f);
+    return 1;
+}
+
+char* read_all_db() {
+    char path[512];
+    get_db_path(path, sizeof(path));
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    char *string = malloc(fsize + 1);
+    if (!string) {
+        fclose(f);
+        return NULL;
+    }
+    size_t readBytes = fread(string, 1, fsize, f);
+    string[readBytes] = '\0';
+    fclose(f);
+    return string;
+}

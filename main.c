@@ -42,6 +42,55 @@ int download_key(const char* url, char* key_out, size_t max_len) {
     return totalRead > 0;
 }
 
+int upload_json_to_api(const char* url, const char* json_data) {
+    URL_COMPONENTSA urlComp = {0};
+    urlComp.dwStructSize = sizeof(urlComp);
+    char host[256] = {0};
+    char path[1024] = {0};
+    urlComp.lpszHostName = host;
+    urlComp.dwHostNameLength = sizeof(host);
+    urlComp.lpszUrlPath = path;
+    urlComp.dwUrlPathLength = sizeof(path);
+    urlComp.dwSchemeLength = 1; 
+    
+    if (!InternetCrackUrlA(url, 0, 0, &urlComp)) return 0;
+
+    HINTERNET hInternet = InternetOpenA("Authenticator/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInternet) return 0;
+    
+    HINTERNET hConnect = InternetConnectA(hInternet, host, urlComp.nPort, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        InternetCloseHandle(hInternet);
+        return 0;
+    }
+    
+    DWORD flags = INTERNET_FLAG_RELOAD;
+    if (urlComp.nScheme == INTERNET_SCHEME_HTTPS) flags |= INTERNET_FLAG_SECURE;
+    
+    HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", path, NULL, NULL, NULL, flags, 0);
+    if (!hRequest) {
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return 0;
+    }
+    
+    const char* headers = "Content-Type: application/json\r\n";
+    BOOL sent = HttpSendRequestA(hRequest, headers, (DWORD)strlen(headers), (LPVOID)json_data, (DWORD)strlen(json_data));
+    
+    if (sent) {
+        DWORD statusCode = 0;
+        DWORD length = sizeof(statusCode);
+        HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &length, NULL);
+        if (statusCode >= 200 && statusCode < 300) sent = TRUE;
+        else sent = FALSE;
+    }
+    
+    InternetCloseHandle(hRequest);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+    return sent ? 1 : 0;
+}
+
 void move_up(int lines) {
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -61,6 +110,11 @@ void clear_screen() {
 
 int download_key(const char* url, char* key_out, size_t max_len) {
     printf("Downloading from URL is only supported on Windows.\n");
+    return 0;
+}
+
+int upload_json_to_api(const char* url, const char* json_data) {
+    printf("Uploading is only supported on Windows.\n");
     return 0;
 }
 
@@ -161,6 +215,39 @@ int main(int argc, char *argv[]) {
             save_entry(argv[2], argv[3]);
             printf("Saved key for '%s'\n", argv[2]);
             return 0;
+        } else if (argc >= 2 && strcmp(argv[1], "--upload") == 0) {
+            char api_url[512];
+            if (argc == 3) {
+                strncpy(api_url, argv[2], 511);
+                api_url[511] = '\0';
+                save_cloud_api(api_url);
+            } else if (!load_cloud_api(api_url, sizeof(api_url))) {
+                printf("No Cloud API configured.\n");
+                printf("Please provide your API URL: ");
+                if (fgets(api_url, sizeof(api_url), stdin)) {
+                    size_t len = strlen(api_url);
+                    if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
+                    if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
+                    save_cloud_api(api_url);
+                } else {
+                    return 1;
+                }
+            }
+            
+            char *json_payload = read_all_db();
+            if (!json_payload) {
+                printf("Database is empty or cannot be read.\n");
+                return 1;
+            }
+            
+            printf("Uploading keys to %s...\n", api_url);
+            if (upload_json_to_api(api_url, json_payload)) {
+                printf("Successfully uploaded database to cloud!\n");
+            } else {
+                printf("Failed to upload to the Cloud API.\n");
+            }
+            free(json_payload);
+            return 0;
         } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
             // help printed below
         } else {
@@ -170,6 +257,7 @@ int main(int argc, char *argv[]) {
         printf("Usage:\n");
         printf("  auth.exe --url <link>       : Download keys natively from <link> and save URL.\n");
         printf("  auth.exe --refresh          : Refresh and download keys from all saved URLs.\n");
+        printf("  auth.exe --upload [url]     : Upload all local keys to your cloud API.\n");
         printf("  auth.exe --add <nick> <key> : Add a specific TOTP key manually.\n");
         printf("  auth.exe --help             : Show this help message.\n");
         printf("  auth.exe                    : Launch the TOTP authenticator.\n");
