@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
         }
         first_iteration = 0;
 
-        printf("===== Refreshing in %02ld sec =====\n", remaining);
+        printf("===== Refreshing in %02ld sec (Press Ctrl+C to close) =====\n", remaining);
         
         for (int i=0; i<count; i++) {
             unsigned char decoded[64];
