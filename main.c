@@ -109,13 +109,55 @@ void clear_screen() {
 #include <stdlib.h>
 
 int download_key(const char* url, char* key_out, size_t max_len) {
-    printf("Downloading from URL is only supported on Windows.\n");
-    return 0;
+    char command[2048];
+    snprintf(command, sizeof(command), "curl -s \"%s\"", url);
+    FILE *fp = popen(command, "r");
+    if (!fp) return 0;
+    
+    size_t totalRead = fread(key_out, 1, max_len - 1, fp);
+    key_out[totalRead] = '\0';
+    
+    while(totalRead > 0 && (key_out[totalRead-1] == '\n' || key_out[totalRead-1] == '\r' || key_out[totalRead-1] == ' ')) {
+        key_out[--totalRead] = '\0';
+    }
+    
+    int status = pclose(fp);
+    return (status == 0 && totalRead > 0) ? 1 : 0;
 }
 
 int upload_json_to_api(const char* url, const char* json_data) {
-    printf("Uploading is only supported on Windows.\n");
-    return 0;
+    char template[] = "/tmp/auth_upload_XXXXXX";
+    int fd = mkstemp(template);
+    if (fd == -1) return 0;
+    
+    FILE *tmp = fdopen(fd, "w");
+    if (!tmp) {
+        close(fd);
+        remove(template);
+        return 0;
+    }
+    fputs(json_data, tmp);
+    fclose(tmp);
+    
+    char command[4096];
+    snprintf(command, sizeof(command), "curl -s -o /dev/null -w \"%%{http_code}\" -X POST \"%s\" -H \"Content-Type: application/json\" -d @%s", url, template);
+    
+    FILE *fp = popen(command, "r");
+    if (!fp) {
+        remove(template);
+        return 0;
+    }
+    
+    char result[32] = {0};
+    int success = 0;
+    if (fgets(result, sizeof(result), fp) != NULL) {
+        int code = atoi(result);
+        if (code >= 200 && code < 300) success = 1;
+    }
+    
+    pclose(fp);
+    remove(template);
+    return success;
 }
 
 void move_up(int lines) {
