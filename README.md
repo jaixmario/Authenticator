@@ -1,0 +1,1 @@
+gcc main.c storage.c totp.c base32.c -o auth.exe -lwininet
