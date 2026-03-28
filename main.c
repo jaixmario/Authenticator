@@ -202,17 +202,18 @@ void parse_and_save_json_keys(const char* json_str) {
         strncpy(key, quote3 + 1, key_len);
         key[key_len] = '\0';
         
-        if (save_entry(nickname, key)) {
-            printf("Merged key for '%s'\n", nickname);
+        int res = save_entry(nickname, key);
+        if (res == 1) {
+            printf("  [+] Added Key: '%s' -> %s\n", nickname, key);
             count++;
         }
         
         ptr = quote4 + 1;
     }
     if (count == 0) {
-        printf("No keys found in the downloaded JSON.\n");
+        printf("0 new keys were added from the downloaded JSON.\n");
     } else {
-        printf("Successfully merged %d key(s).\n", count);
+        printf("Successfully synced %d new key(s) locally.\n", count);
     }
 }
 
@@ -254,7 +255,48 @@ int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
 
     if (argc > 1) {
-        if (argc >= 2 && strcmp(argv[1], "--refresh") == 0) {
+        if (argc >= 2 && strcmp(argv[1], "--sync") == 0) {
+            char api_url[512] = {0};
+            if (!get_or_prompt_api(argc, argv, api_url, sizeof(api_url))) return 1;
+            
+            char *downloaded_json = (char*)malloc(8192);
+            if (!downloaded_json) {
+                printf("Memory allocation failed.\n");
+                return 1;
+            }
+            int upload_count = 0;
+            printf("Syncing: Fetching keys from %s...\n", api_url);
+            if (download_key(api_url, downloaded_json, 8192)) {
+                parse_and_save_json_keys(downloaded_json);
+                
+                AuthEntry entries[100];
+                int count = load_entries(entries, 100);
+                
+                for (int i=0; i<count; i++) {
+                    char search_str[128];
+                    snprintf(search_str, sizeof(search_str), "\"%s\"", entries[i].nickname);
+                    if (strstr(downloaded_json, search_str) == NULL) {
+                        printf("  [+] Pushing Local-Only Key: '%s'\n", entries[i].nickname);
+                        upload_count++;
+                    }
+                }
+            } else {
+                printf("Failed to fetch from %s\n", api_url);
+            }
+            free(downloaded_json);
+            
+            char *json_payload = read_all_db();
+            if (json_payload) {
+                printf("\nSyncing: Pushing combined database back to server...\n");
+                if (upload_json_to_api(api_url, json_payload)) {
+                    printf("Successfully synced database back to cloud! (%d local-only key(s) uploaded)\n", upload_count);
+                } else {
+                    printf("Failed to sync database to the Cloud API.\n");
+                }
+                free(json_payload);
+            }
+            return 0;
+        } else if (argc >= 2 && strcmp(argv[1], "--refresh") == 0) {
             char api_url[512] = {0};
             if (!get_or_prompt_api(argc, argv, api_url, sizeof(api_url))) return 1;
             
@@ -333,6 +375,7 @@ int main(int argc, char *argv[]) {
         }
 
         printf("Usage:\n");
+        printf("  auth.exe --sync [link]      : Safely syncs DB both directions unifying differences.\n");
         printf("  auth.exe --refresh [link]   : Refresh and download keys from universal API.\n");
         printf("  auth.exe --upload [link]    : Upload all local keys to your cloud API.\n");
         printf("  auth.exe --change-api [url] : Change explicitly mapping universal API connection.\n");

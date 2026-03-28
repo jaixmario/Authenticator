@@ -89,8 +89,7 @@ int save_entry(const char *nickname, const char *key) {
 
     if (found_index >= 0) {
         if (strcmp(entries[found_index].key, key) == 0) {
-            printf("  -> Key for '%s' matches exactly. Skipping.\n", nickname);
-            return 1;
+            return 2;
         } else {
             printf("  -> Conflict! '%s' has a different key.\n", nickname);
             printf("     (r)eplace existing or (k)eep both as '%s 2'? [r/k]: ", nickname);
