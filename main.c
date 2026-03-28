@@ -220,39 +220,52 @@ int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
 
     if (argc > 1) {
-        if (argc == 3 && strcmp(argv[1], "--url") == 0 && (strncmp(argv[2], "http://", 7) == 0 || strncmp(argv[2], "https://", 8) == 0)) {
+        if (argc >= 2 && strcmp(argv[1], "--url") == 0) {
+            char api_url[512];
+            if (argc == 3 && (strncmp(argv[2], "http://", 7) == 0 || strncmp(argv[2], "https://", 8) == 0)) {
+                strncpy(api_url, argv[2], 511);
+                api_url[511] = '\0';
+                save_cloud_api(api_url);
+            } else if (!load_cloud_api(api_url, sizeof(api_url))) {
+                printf("No Cloud API configured.\n");
+                printf("Please provide your API URL: ");
+                if (fgets(api_url, sizeof(api_url), stdin)) {
+                    size_t len = strlen(api_url);
+                    if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
+                    if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
+                    save_cloud_api(api_url);
+                } else {
+                    return 1;
+                }
+            }
+
             char *downloaded_json = (char*)malloc(8192);
             if (!downloaded_json) {
                 printf("Memory allocation failed.\n");
                 return 1;
             }
-            printf("Downloading JSON from %s...\n", argv[2]);
-            if (download_key(argv[2], downloaded_json, 8192)) {
+            printf("Downloading JSON from %s...\n", api_url);
+            if (download_key(api_url, downloaded_json, 8192)) {
                 parse_and_save_json_keys(downloaded_json);
-                save_url(argv[2]);
             } else {
                 printf("Failed to download from URL.\n");
             }
             free(downloaded_json);
             return 0;
         } else if (argc == 2 && strcmp(argv[1], "--refresh") == 0) {
-            char urls[20][512];
-            int url_count = load_urls(urls, 20);
-            if (url_count == 0) {
-                printf("No URLs saved. Fetch a key first using: auth.exe --url <link>\n");
+            char api_url[512];
+            if (!load_cloud_api(api_url, sizeof(api_url))) {
+                printf("No API configured. Fetch a key first using: auth.exe --url <link>\n");
                 return 1;
             }
-            printf("Refreshing keys from %d saved URLs...\n", url_count);
-            for (int i=0; i<url_count; i++) {
-                char *downloaded_json = (char*)malloc(8192);
-                if (downloaded_json && download_key(urls[i], downloaded_json, 8192)) {
-                    printf("--- Refreshed from %s ---\n", urls[i]);
-                    parse_and_save_json_keys(downloaded_json);
-                } else {
-                    printf("Failed to fetch from %s\n", urls[i]);
-                }
-                if (downloaded_json) free(downloaded_json);
+            printf("Refreshing keys from %s...\n", api_url);
+            char *downloaded_json = (char*)malloc(8192);
+            if (downloaded_json && download_key(api_url, downloaded_json, 8192)) {
+                parse_and_save_json_keys(downloaded_json);
+            } else {
+                printf("Failed to fetch from %s\n", api_url);
             }
+            if (downloaded_json) free(downloaded_json);
             return 0;
         } else if (argc == 4 && strcmp(argv[1], "--add") == 0) {
             if (save_entry(argv[2], argv[3])) {
@@ -306,8 +319,8 @@ int main(int argc, char *argv[]) {
         }
 
         printf("Usage:\n");
-        printf("  auth.exe --url <link>       : Download keys natively from <link> and save URL.\n");
-        printf("  auth.exe --refresh          : Refresh and download keys from all saved URLs.\n");
+        printf("  auth.exe --url [link]       : Download keys natively from universal API.\n");
+        printf("  auth.exe --refresh          : Refresh and download keys from universal API.\n");
         printf("  auth.exe --upload [url]     : Upload all local keys to your cloud API.\n");
         printf("  auth.exe --add <nick> <key> : Add a specific TOTP key manually.\n");
         printf("  auth.exe --delete <nick>    : Delete a TOTP key by its nickname.\n");
