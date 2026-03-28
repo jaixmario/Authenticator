@@ -216,28 +216,47 @@ void parse_and_save_json_keys(const char* json_str) {
     }
 }
 
+int is_valid_url(const char *url) {
+    if (!url) return 0;
+    return (strncmp(url, "http://", 7) == 0 || strncmp(url, "https://", 8) == 0);
+}
+
+int get_or_prompt_api(int argc, char *argv[], char *api_url, size_t max_len) {
+    int needs_save = 0;
+    if (argc >= 3) {
+        strncpy(api_url, argv[2], max_len - 1);
+        api_url[max_len - 1] = '\0';
+        needs_save = 1;
+    } else if (!load_cloud_api(api_url, max_len)) {
+        printf("No API configured.\n");
+        printf("Please provide your API URL: ");
+        if (fgets(api_url, (int)max_len, stdin)) {
+            size_t len = strlen(api_url);
+            if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
+            if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
+            needs_save = 1;
+        } else {
+            return 0;
+        }
+    }
+    
+    if (needs_save) {
+        if (!is_valid_url(api_url)) {
+            printf("Invalid URL format. Must start with http:// or https://\n");
+            return 0;
+        }
+        save_cloud_api(api_url);
+    }
+    return 1;
+}
+
 int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
 
     if (argc > 1) {
         if (argc >= 2 && strcmp(argv[1], "--refresh") == 0) {
-            char api_url[512];
-            if (argc == 3 && (strncmp(argv[2], "http://", 7) == 0 || strncmp(argv[2], "https://", 8) == 0)) {
-                strncpy(api_url, argv[2], 511);
-                api_url[511] = '\0';
-                save_cloud_api(api_url);
-            } else if (!load_cloud_api(api_url, sizeof(api_url))) {
-                printf("No Cloud API configured.\n");
-                printf("Please provide your API URL: ");
-                if (fgets(api_url, sizeof(api_url), stdin)) {
-                    size_t len = strlen(api_url);
-                    if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
-                    if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
-                    save_cloud_api(api_url);
-                } else {
-                    return 1;
-                }
-            }
+            char api_url[512] = {0};
+            if (!get_or_prompt_api(argc, argv, api_url, sizeof(api_url))) return 1;
             
             char *downloaded_json = (char*)malloc(8192);
             if (!downloaded_json) {
@@ -265,23 +284,8 @@ int main(int argc, char *argv[]) {
             }
             return 0;
         } else if (argc >= 2 && strcmp(argv[1], "--upload") == 0) {
-            char api_url[512];
-            if (argc == 3) {
-                strncpy(api_url, argv[2], 511);
-                api_url[511] = '\0';
-                save_cloud_api(api_url);
-            } else if (!load_cloud_api(api_url, sizeof(api_url))) {
-                printf("No Cloud API configured.\n");
-                printf("Please provide your API URL: ");
-                if (fgets(api_url, sizeof(api_url), stdin)) {
-                    size_t len = strlen(api_url);
-                    if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
-                    if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
-                    save_cloud_api(api_url);
-                } else {
-                    return 1;
-                }
-            }
+            char api_url[512] = {0};
+            if (!get_or_prompt_api(argc, argv, api_url, sizeof(api_url))) return 1;
             
             char *json_payload = read_all_db();
             if (!json_payload) {
@@ -297,6 +301,31 @@ int main(int argc, char *argv[]) {
             }
             free(json_payload);
             return 0;
+        } else if (argc >= 2 && strcmp(argv[1], "--change-api") == 0) {
+            char api_url[512] = {0};
+            if (argc == 3) {
+                strncpy(api_url, argv[2], 511);
+                api_url[511] = '\0';
+            } else {
+                printf("Please provide your new API URL: ");
+                if (fgets(api_url, sizeof(api_url), stdin)) {
+                    size_t len = strlen(api_url);
+                    if (len > 0 && api_url[len-1] == '\n') api_url[len-1] = '\0';
+                    if (len > 1 && api_url[len-2] == '\r') api_url[len-2] = '\0';
+                } else {
+                    return 1;
+                }
+            }
+            if (!is_valid_url(api_url)) {
+                printf("Invalid URL format. Must start with http:// or https://\n");
+                return 1;
+            }
+            if (save_cloud_api(api_url)) {
+                printf("API URL successfully updated to: %s\n", api_url);
+            } else {
+                printf("Failed to update API URL.\n");
+            }
+            return 0;
         } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
             // help printed below
         } else {
@@ -306,6 +335,7 @@ int main(int argc, char *argv[]) {
         printf("Usage:\n");
         printf("  auth.exe --refresh [link]   : Refresh and download keys from universal API.\n");
         printf("  auth.exe --upload [link]    : Upload all local keys to your cloud API.\n");
+        printf("  auth.exe --change-api [url] : Change explicitly mapping universal API connection.\n");
         printf("  auth.exe --add <nick> <key> : Add a specific TOTP key manually.\n");
         printf("  auth.exe --delete <nick>    : Delete a TOTP key by its nickname.\n");
         printf("  auth.exe --help             : Show this help message.\n");
